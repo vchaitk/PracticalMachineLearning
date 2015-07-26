@@ -1,0 +1,90 @@
+---
+title: "Machine Learning - Analysis of weight-lifting exercises and building a predictive model for predicting the manner"
+author: "Venkata Chaitanya Krishna Vasamsetty"
+date: "07/26/2015"
+output: html_document
+---
+# Data Processing
+In order to ensure reproduceability, the following libraries are required and loaded. Also, e1071 package is additionally required while running this code.
+
+```{r, echo=TRUE}
+library(Hmisc)
+library(foreach)
+library(doParallel)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+Also, the seed to set a specific value for reproduceability.
+```{r, echo=TRUE}
+set.seed(33333)
+```
+## Loading the Data
+```{r, echo=TRUE}
+trainingDataURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingDataURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+The entries with "NA" and "#DIV/0!" are considered as null values while loading the datasets into memory.
+```{r, echo=TRUE}
+trainingData <- read.csv(url(trainingDataURL), na.strings=c("NA","#DIV/0!",""))
+testingData <- read.csv(url(testingDataURL), na.strings=c("NA","#DIV/0!",""))
+for(i in c(8:ncol(trainingData)-1)) {trainingData[,i] = as.numeric(as.character(trainingData[,i]))}
+for(i in c(8:ncol(testingData)-1)) {testingData[,i] = as.numeric(as.character(testingData[,i]))}
+```
+
+Clean the variables that do not contribute well to prediction or had incomplete values in them.
+```{r, echo=TRUE}
+feature_set <- colnames(trainingData[colSums(is.na(trainingData)) == 0])[-(1:7)]
+model_data <- trainingData[feature_set]
+```
+The training data is paritioned to two parts so that it can be later used for cross-validation.
+```{r, echo=TRUE}
+x <- createDataPartition(y=model_data$classe, p=0.6, list=FALSE)
+PartitionedTrainingData <- model_data[x, ]; PartitionedTestingData <- model_data[-x, ]
+```
+## ML Algorithm for Prediction 
+
+### Decision Tree
+```{r, echo=TRUE}
+modelFit_DecisionTree <- rpart(classe ~ ., data=PartitionedTrainingData, method="class")
+fancyRpartPlot(modelFit_DecisionTree)
+```
+Confusion Matrix is used to test the prediction results
+```{r, echo=TRUE}
+predictions_DecisionTree <- predict(modelFit_DecisionTree, PartitionedTestingData, type = "class")
+confusionMatrix(predictions_DecisionTree, PartitionedTestingData$classe) # an error might come up if e1071 is not installed. Please ensure that it is installed before running this line.
+```
+
+### Random Forests
+
+```{r, echo=TRUE}
+modelFit_RandomForests <- randomForest(classe ~. , data=PartitionedTrainingData)
+```
+Confusion Matrix is used to test the prediction results
+```{r, echo=TRUE}
+predictions_RandomForests <- predict(modelFit_RandomForests, PartitionedTestingData, type = "class")
+confusionMatrix(predictions_RandomForests, PartitionedTestingData$classe)
+```
+
+## Conclusion
+Random Forests provide better accuracy than Decision Trees.
+
+## Generating answers for the test cases
+This details on the approach used to find 
+```{r, echo=TRUE}
+predictions_testingData <- predict(modelFit_RandomForests, testingData, type = "class")
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictions_testingData)
+
+
+```
